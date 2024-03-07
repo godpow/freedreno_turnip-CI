@@ -65,58 +65,72 @@ check_deps(){
 	pip install mako &> /dev/null
 }
 
-prepare_workdir(){
-	echo "Creating and entering to work directory ..." $'\n'
-	mkdir -p "$workdir" && cd "$_"
+prepare_workdir() {
+    echo "Creating and entering to work directory ..." $'\n'
+    mkdir -p "$workdir" && cd "$_"
 
-	if [ -z "${ANDROID_NDK_LATEST_HOME}" ]; then
-		if [ ! -n "$(ls -d android-ndk*)" ]; then
-			echo "Downloading android-ndk from google server (~640 MB) ..." $'\n'
-			curl https://dl.google.com/android/repository/"$ndkver"-linux.zip --output "$ndkver"-linux.zip &> /dev/null
-			###
-			echo "Exracting android-ndk to a folder ..." $'\n'
-			unzip "$ndkver"-linux.zip  &> /dev/null
-		fi
-	else	
-		echo "Using android ndk from github image"
-	fi
+    if [ -z "${ANDROID_NDK_LATEST_HOME}" ]; then
+        if [ ! -n "$(ls -d android-ndk*)" ]; then
+            echo "Downloading android-ndk from google server (~640 MB) ..." $'\n'
+            curl https://dl.google.com/android/repository/"$ndkver"-linux.zip --output "$ndkver"-linux.zip &>/dev/null
+            ###
+            echo "Exracting android-ndk to a folder ..." $'\n'
+            unzip "$ndkver"-linux.zip &>/dev/null
+        fi
+    else
+        echo "Using android ndk from github image"
+    fi
 
-	if [ -z "$1" ]; then
-		if [ -d mesa ]; then
-			echo "Removing old mesa ..." $'\n'
-			rm -rf mesa
-		fi
-		
-		echo "Cloning mesa ..." $'\n'
-		git clone --depth=1 "$mesasrc"  &> /dev/null
+    if [ -z "$1" ]; then
+        if [ -d mesa ]; then
+            echo "Removing old mesa ..." $'\n'
+            rm -rf mesa
+        fi
 
-		cd mesa
-		commit_short=$(git rev-parse --short HEAD)
-		commit=$(git rev-parse HEAD)
-		mesa_version=$(cat VERSION | xargs)
-		version=$(awk -F'COMPLETE VK_MAKE_API_VERSION(|)' '{print $2}' <<< $(cat include/vulkan/vulkan_core.h) | xargs)
-		major=$(echo $version | cut -d "," -f 2 | xargs)
-		minor=$(echo $version | cut -d "," -f 3 | xargs)
-		patch=$(awk -F'VK_HEADER_VERSION |\n#define' '{print $2}' <<< $(cat include/vulkan/vulkan_core.h) | xargs)
-		vulkan_version="$major.$minor.$patch"
-	else		
-		if [ -z ${experimental_patches+x} ]; then
-			echo "No experimental patches found"; 
-		else 
-			patches=("${experimental_patches[@]}" "${patches[@]}")
-		fi
+        echo "Cloning mesa ..." $'\n'
+        git clone --depth=1 "$mesasrc" &>/dev/null
 
-		cd mesa
-		for patch in ${patches[@]}; do
-			echo "Applying patch $patch"
-			patch_source="$(echo $patch | cut -d ";" -f 2 | xargs)"
-			patch_file="${patch_source#*\/}"
-			patch_args=$(echo $patch | cut -d ";" -f 3 | xargs)
-			curl --output "$patch_file".patch -k --retry 5  https://gitlab.freedesktop.org/mesa/mesa/-/"$patch_source".patch
-		
-			git apply $patch_args "$patch_file".patch
-		done
-	fi
+        cd mesa
+        commit_short=$(git rev-parse --short HEAD)
+        commit=$(git rev-parse HEAD)
+        mesa_version=$(cat VERSION | xargs)
+        version=$(awk -F'COMPLETE VK_MAKE_API_VERSION(|)' '{print $2}' <<< $(cat include/vulkan/vulkan_core.h) | xargs)
+        major=$(echo $version | cut -d "," -f 2 | xargs)
+        minor=$(echo $version | cut -d "," -f 3 | xargs)
+        patch=$(awk -F'VK_HEADER_VERSION |\n#define' '{print $2}' <<< $(cat include/vulkan/vulkan_core.h) | xargs)
+        vulkan_version="$major.$minor.$patch"
+    else
+        if [ -z ${experimental_patches+x} ]; then
+            echo "No experimental patches found"
+        else
+            patches=("${experimental_patches[@]}" "${patches[@]}")
+        fi
+
+        # Check for upstream changes
+        cd mesa
+        git fetch origin
+        upstream_changes=$(git log HEAD..origin/main --oneline)
+        if [ -n "$upstream_changes" ]; then
+            echo "Upstream changes:" >> "$workdir"/changelog
+            echo "$upstream_changes" >> "$workdir"/changelog
+            echo "" >> "$workdir"/changelog
+            echo "Applying upstream changes..."
+            git pull
+        else
+            echo "No upstream changes found." >> "$workdir"/changelog
+        fi
+
+        echo "Other changes:" >> "$workdir"/changelog
+        for patch in ${patches[@]}; do
+            echo "Applying patch $patch" >> "$workdir"/changelog
+            patch_source="$(echo $patch | cut -d ";" -f 2 | xargs)"
+            patch_file="${patch_source#*\/}"
+            patch_args=$(echo $patch | cut -d ";" -f 3 | xargs)
+            curl --output "$patch_file".patch -k --retry 5 https://gitlab.freedesktop.org/mesa/mesa/-/"$patch_source".patch
+
+            git apply $patch_args "$patch_file".patch
+        done
+    fi
 }
 
 build_lib_for_android(){
