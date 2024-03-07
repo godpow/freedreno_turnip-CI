@@ -93,13 +93,18 @@ prepare_workdir() {
     echo "Creating and entering to work directory ..." $'\n'
     mkdir -p "$workdir" && cd "$_"
 
+    # Restore cached NDK
     if [ -z "${ANDROID_NDK_LATEST_HOME}" ]; then
-        if [ ! -n "$(ls -d android-ndk*)" ]; then
+        cached_ndk_path=$(restore_cached_ndk)
+        if [ -n "$cached_ndk_path" ]; then
+            echo "Using cached Android NDK: $cached_ndk_path"
+        else
             echo "Downloading android-ndk from google server (~640 MB) ..." $'\n'
             curl https://dl.google.com/android/repository/"$ndkver"-linux.zip --output "$ndkver"-linux.zip &>/dev/null
             ###
             echo "Exracting android-ndk to a folder ..." $'\n'
             unzip "$ndkver"-linux.zip &>/dev/null
+            cache_ndk "$workdir/$ndkver"
         fi
     else
         echo "Using android ndk from github image"
