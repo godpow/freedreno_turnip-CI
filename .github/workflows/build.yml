@@ -1,32 +1,5 @@
-name: Build
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-
-  build:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Cache dependencies
-      uses: actions/cache@v3
+- name: Cache Android NDK
+      uses: actions/cache@v4.0.1
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-          
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ${{ env.DEBIAN_DEPENDENCIES }}
-        pip install -r requirements.txt
-        
-    - name: Run the script
-      run: bash turnip_builder.sh
+        path: ~/.cache/android-ndk-${{ env.NDK_VERSION }}
+        key: ${{ runner.os }}-android-ndk-${{ env.NDK_VERSION }}
