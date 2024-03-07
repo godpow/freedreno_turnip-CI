@@ -162,6 +162,114 @@ prepare_workdir() {
     fi
 }
 
+restore_cached_ndk() {
+    local cached_ndk_path=""
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        cached_ndk_path=$(restore_cache "android-ndk" "$ndkver" "$workdir")
+    fi
+    echo "$cached_ndk_path"
+}
+
+cache_ndk() {
+    local ndk_path="$1"
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        cache_dir "android-ndk" "$ndkver" "$ndk_path"
+    fi
+}
+
+restore_cache() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+
+    local cached_path=""
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        cached_path=$(restore_cache_action "$cache_name" "$cache_key" "$cache_path")
+    fi
+    echo "$cached_path"
+}
+
+cache_dir() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        cache_dir_action "$cache_name" "$cache_key" "$cache_path"
+    fi
+}
+
+restore_cache_action() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+
+    local cached_path=""
+    cached_path=$(actions_cache_restore "$cache_name" "$cache_key" "$cache_path")
+    echo "$cached_path"
+}
+
+cache_dir_action() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+
+    actions_cache_save "$cache_name" "$cache_key" "$cache_path"
+}
+
+actions_cache_restore() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+
+    local cached_path=""
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        cached_path=$(echo "${GITHUB_WORKSPACE}/.cache/$cache_name-$cache_key" | sed 's/\/$//')
+        echo "Restoring $cache_name cache from $cached_path"
+        mkdir -p "$cached_path"
+        echo "$cache_path" >> "$GITHUB_PATH"
+        restore_keys=$(echo "$cache_key" | sed 's/$/,/')
+        restore_keys+="$cache_name-"
+        echo "Restoring $cache_name cache with key: $cache_key and restore keys: $restore_keys"
+        cached_path=$(restore_cache_action "$cache_name" "$cache_key" "$cache_path" "$restore_keys")
+    fi
+    echo "$cached_path"
+}
+
+actions_cache_save() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        echo "Saving $cache_name cache from $cache_path"
+        cache_dir_action "$cache_name" "$cache_key" "$cache_path"
+    fi
+}
+
+restore_cache_action() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+    local restore_keys="$4"
+
+    local cached_path=""
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        cached_path=$(${GITHUB_ACTION_PATH:-/opt/hostedtoolcache}/restore-cache.sh "$cache_name" "$cache_key" "$restore_keys" "$cache_path")
+    fi
+    echo "$cached_path"
+}
+
+cache_dir_action() {
+    local cache_name="$1"
+    local cache_key="$2"
+    local cache_path="$3"
+
+    if [ -n "${GITHUB_WORKSPACE}" ]; then
+        ${GITHUB_ACTION_PATH:-/opt/hostedtoolcache}/save-cache.sh "$cache_name" "$cache_key" "$cache_path"
+    fi
+}
+
 build_lib_for_android() {
     echo "Creating meson cross file ..." $'\n'
     if [ -z "${ANDROID_NDK_LATEST_HOME}" ]; then
